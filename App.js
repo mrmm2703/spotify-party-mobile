@@ -181,6 +181,60 @@ function JoinPartyPage({ navigation }) {
   )
 }
 
+// Party Page
+function PartyPage({ navigation }) {
+      // Stylesheet
+      const styles = StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: '#191414',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        },
+        button: {
+          marginBottom: 100
+        },
+        text_header: {
+          color: "#FFFFFF",
+          fontSize: 30,
+          textAlign: "center",
+          fontWeight: "700"
+        },
+        text_input: {
+          width: win2,
+          height: 50,
+          color: "#FFFFFF",
+          backgroundColor: "#292424",
+          textAlign: "center",
+          marginTop: 50,
+          fontSize: 20,
+          borderRadius: 5,
+        }
+      });
+  
+    const [party_inp, onChangeText] = React.useState("");
+    return (
+      <View style={styles.container}>
+        <View style={{marginTop: 150}}>
+        <Text style={styles.text_header}>Join Party</Text>
+        <TextInput
+          style={styles.text_input}
+          onChangeText={text => onChangeText(text)}
+          placeholder="Party code"
+          value={party_inp}
+        />  
+        </View>
+        <View style={styles.button}>
+        <Button
+          color="#1DB954"
+          title="Join Party"
+          onPress={buttonHandler}
+        />
+        </View>
+      </View>
+    )
+}
+
 // Main app
 export default function App() {
   return (
@@ -190,6 +244,7 @@ export default function App() {
       screenOptions={{headerShown: false}}>
         <Stack.Screen name="Connect to Spotify" component={ConnectToSpotifyPage} />
         <Stack.Screen name="Join Party" component={JoinPartyPage} />
+        <Stack.Screen name="Spotify Party" component={PartyPage} />
       </Stack.Navigator>
     </NavigationContainer>
   );
