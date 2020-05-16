@@ -10,6 +10,8 @@ let access_token = "NULL";
 let party_code = "NULL";
 const Stack = createStackNavigator();
 
+let Spotify = require("spotify-web-api-js");
+
 // Deep link handler
 Linking.addEventListener("url", _handleUrl)
 
@@ -117,8 +119,11 @@ function ConnectToSpotifyPage({ navigation }) {
   )
 }
 
+let SpotifyApi;
+
 // Join Party Page
 function JoinPartyPage({ navigation }) {
+  let SpotifyApi = new Spotify();
   init_done = false;
   chatMessagesGlobal = [];
   msgId = 0;
@@ -164,10 +169,9 @@ function JoinPartyPage({ navigation }) {
           socket.close();
           socket = io.connect("https://fourone.ddns.net:3000");
         }
-        
+
         console.log("Continueeeee");
         party_code = party_inp;
-        navigation.push("Spotify Party");
 
         // Get user information from Spotify
         fetch("https://api.spotify.com/v1/me", {
@@ -196,8 +200,34 @@ function JoinPartyPage({ navigation }) {
             console.log(_name);
             console.log(_profile_url);
             console.log(_premium);
-            // Send to server
-            socket.emit("name", {premium: _premium, name: json["display_name"], id: json["id"], profile_url: _profile_url, chatroom: party_code})
+            // Setup SpotifyApi
+            SpotifyApi.setAccessToken(access_token);
+            // Check for devices
+            SpotifyApi.getMyDevices(function(err, data) {
+              console.log(data);
+              if (err) {
+                alert("Could not connect to Spotify.");
+                console.log(err);
+              } else {
+                if (data["devices"].length == 0) {
+                  alert("Please open Spotify on a device to continue.");
+                } else {
+                  let active = false;
+                  data["devices"].forEach(function(d) {
+                    if (d["is_active"]) {
+                      active = true;
+                    }
+                  })
+                  if (active == false) {
+                    alert("Please open Spotify on an active device to continue.")
+                  } else {
+                    // Send to server
+                    socket.emit("name", {premium: _premium, name: json["display_name"], id: json["id"], profile_url: _profile_url, chatroom: party_code});
+                    navigation.push("Spotify Party");
+                  }
+                }
+              }
+            })
           })
       }
     }
@@ -318,7 +348,7 @@ function PartyPage({ navigation }) {
       width: "100%"
     },
     message_input: {
-      backgroundColor: "#323232",
+      backgroundColor: "#292424",
       position: "absolute",
       bottom: 8,
       left: 8,
