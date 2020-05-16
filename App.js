@@ -242,11 +242,14 @@ function SkipRoom(myData) {
 }
 
 let init_done = false;
+let first_join = true;
 let chatMessagesGlobal = [];
 let msgId = 0;
+let typingEmptier = false;
 
 // Party Page
 function PartyPage({ navigation }) {
+  let scrollView;
   // Stylesheet
   const styles = StyleSheet.create({
     container: {
@@ -268,6 +271,22 @@ function PartyPage({ navigation }) {
       width: 40,
       height: 40,
       bottom: 8,
+    },
+    chatroom_container: {
+      position: "absolute",
+      bottom: 8,
+      textAlign: "center",
+      width: "100%"
+    },
+    chatroom_typing: {
+      textAlign: "center",
+      fontSize: 12,
+      color: "#B9B9B9"
+    },
+    chatroom_number: {
+      textAlign: "center",
+      fontSize: 12,
+      color: "#707070",
     },
     header_text_container: {
       position: "absolute",
@@ -404,12 +423,12 @@ function PartyPage({ navigation }) {
     chatMessage: "",
     chatMessages: chatMessagesGlobal,
   });
+  let [typingText, setTypingText] = React.useState();
+  let [chatroomNumber, setChatroomNumber] = React.useState();
 
   let time = "NULL";
   // Chat maker
-  function Chat(myName, myId, myMsg, myEmp, msgId) {
-    let date = new Date();
-    time = date.getHours() + ":" + date.getMinutes();
+  function Chat(myName, myId, myMsg, myEmp, msgId, time) {
     if (myEmp) {
       if (myId == _id) {
         console.log("EMP, ME");
@@ -473,34 +492,80 @@ function PartyPage({ navigation }) {
   }, 400);
 
   // Listeners
-  function gotMsg(data) {
+  function addChat(data, emp) {
     if (SkipRoom(data.chatroom)) {
       return;
     }
+    data.msgId = msgId;
+    msgId = msgId + 1;
     console.log("Got message!");
     console.log(data.message);
+    data.emp = emp;
+    let date = new Date();
+    let hours = date.getHours().toString();
+    let minutes = date.getMinutes().toString();
+    if (hours.length == 1) {
+      hours = "0" + hours;
+    }
+    if (minutes.length == 1) {
+      minutes = "0" + minutes;
+    }
+    data.time = hours + ":" + minutes;
     chatMessagesGlobal.push(data);
     setState({ chatMessages: chatMessagesGlobal});
   }
-  // One timers
+
   if (!(init_done)) {
     // Socket listeners
     console.log("MAKING LISTENER")
-    socket.on("message", (data) => {
-      if (SkipRoom(data.chatroom)) {
-        return;
-      }
-      data.msgId = msgId;
-      msgId = msgId + 1;
-      gotMsg(data);
-      // setChats(chats.push(Chat("Name", "NULL", "myMsg", false)));
+    socket.on("message", (data) => { // Listener: "message"
+      addChat(data, false);
     })
-    init_done = true
+    socket.on("joined", (data) => { // Listener: "joined"
+      if (msgId == 0) {
+        console.log("First Join")
+        data.id = _id;
+      } else {
+        console.log("!First join")
+      }
+      data.message = "Joined the party";
+      addChat(data, true)
+    })
+    socket.on("change_name", (data) => { // Listener: "change_name"
+      data.id = "DEFO NOT ME";
+      data.name = data.new_name;
+      data.message = "Changed name from \"" + data.old_name + "\" to \"" + data.new_name + "\"";
+      addChat(data, true);
+    })
+    socket.on("user_disconnected", (data) => { // Listener: "user_disconnected"
+      data.id = "DEFO NOT ME";
+      data.message = "Left the party";
+      addChat(data, true);
+    })
+    socket.on("typing", (data) => { // Listener: "typing"
+      if (SkipRoom(data.chatroom)) {
+        return
+      }
+      if (!(data.id == _id)) {
+        setTypingText(data.name + " is typing")
+        setTimeout(function() {
+            setTypingText("");
+        }, 500);
+      }
+    })
+    socket.on("chatroom_number", (data) => { // Listener : "chatroom_number"
+      if (data.number == 1) {
+        setChatroomNumber("You're all alone")
+      } else {
+        setChatroomNumber(data.number + " in party")
+      }
+    })
+    init_done = true;
   }
 
   const [message_input, onChangeMessage] = React.useState("");
   const chatMessages = state.chatMessages.map(chatMessage => (
-    Chat(chatMessage.name, chatMessage.id, chatMessage.message, false, chatMessage.msgId)
+    Chat(chatMessage.name, chatMessage.id, chatMessage.message, chatMessage.emp, chatMessage.msgId, chatMessage.time)
   ))
 
   // Reactors
@@ -510,12 +575,17 @@ function PartyPage({ navigation }) {
   }
   function sendTyping(text) { // Emit typing
     socket.emit("typing");
+    console.log("typing");
     onChangeMessage(text);
   }
   return (
     <View style={styles.container}>
       <View style={styles.header_container}>
         <Image style={styles.prof_pic} source={{uri: profile_url}} />
+        <View style={styles.chatroom_container}>
+          <Text style={styles.chatroom_typing}>{typingText}</Text>
+          <Text style={styles.chatroom_number}>{chatroomNumber}</Text>
+        </View>
         <View style={styles.header_text_container}>
           <Text style={styles.header_text_name}>{name}</Text>
           <Text style={styles.header_text_party_code}>party code <Text style={styles.header_text_party_code_code}>{party_code}</Text></Text>
@@ -525,8 +595,8 @@ function PartyPage({ navigation }) {
       <View style={styles.scroller_container}>
         <ScrollView
         style={styles.scroller}
-        ref={ref => {this.scrollView = ref}}
-        onContentSizeChange={() => this.scrollView.scrollToEnd({animated: true})}>
+        ref={ref => {scrollView = ref}}
+        onContentSizeChange={() => scrollView.scrollToEnd({animated: true})}>
           {chatMessages}
         </ScrollView>
       </View>
