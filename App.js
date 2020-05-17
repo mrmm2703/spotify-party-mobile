@@ -282,7 +282,7 @@ let p_track;
 let p_track_title;
 let p_track_uri;
 let doPoller = true;
-let skip = true;
+let skip = false;
 let continueWithSeek;
 let idCheck;
 
@@ -671,7 +671,7 @@ function PartyPage({ navigation }) {
       if (SkipRoom(data.chatroom)) {
         return
       }
-      if (skip) {
+      if (skip == true) {
         console.log("SKIP ENABLED");
         return
       }
