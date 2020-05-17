@@ -123,7 +123,8 @@ let SpotifyApi;
 
 // Join Party Page
 function JoinPartyPage({ navigation }) {
-  let SpotifyApi = new Spotify();
+  doPoller = false;
+  SpotifyApi = new Spotify();
   init_done = false;
   chatMessagesGlobal = [];
   msgId = 0;
@@ -223,6 +224,7 @@ function JoinPartyPage({ navigation }) {
                   } else {
                     // Send to server
                     socket.emit("name", {premium: _premium, name: json["display_name"], id: json["id"], profile_url: _profile_url, chatroom: party_code});
+                    doPoller = true;
                     navigation.push("Spotify Party");
                   }
                 }
@@ -272,10 +274,21 @@ function SkipRoom(myData) {
 }
 
 let init_done = false;
-let first_join = true;
 let chatMessagesGlobal = [];
 let msgId = 0;
-let typingEmptier = false;
+let p_paused;
+let p_position;
+let p_track;
+let p_track_title;
+let p_track_uri;
+let doPoller = true;
+let skip = true;
+let continueWithSeek;
+let idCheck;
+
+function offSkipper() {
+  skip = false;
+}
 
 // Party Page
 function PartyPage({ navigation }) {
@@ -448,16 +461,17 @@ function PartyPage({ navigation }) {
       width: "100%",
     }
   });
-
+  
+  // UI Chat Messages
   let [state, setState] = React.useState({
     chatMessage: "",
     chatMessages: chatMessagesGlobal,
   });
   let [typingText, setTypingText] = React.useState();
   let [chatroomNumber, setChatroomNumber] = React.useState();
-
-  let time = "NULL";
+  
   // Chat maker
+  let time = "NULL";
   function Chat(myName, myId, myMsg, myEmp, msgId, time) {
     if (myEmp) {
       if (myId == _id) {
@@ -513,7 +527,7 @@ function PartyPage({ navigation }) {
       }
     }
   }
-
+  // UI States
   const [name, setName] = React.useState(_name);
   const [profile_url, setProfileUrl] = React.useState(_profile_url);
   setTimeout(function() {
@@ -521,7 +535,14 @@ function PartyPage({ navigation }) {
     setProfileUrl(_profile_url)
   }, 400);
 
-  // Listeners
+  // Milliseconds to nice time
+  function millisToMinutesAndSeconds(millis) {
+    var minutes = Math.floor(millis / 60000);
+    var seconds = ((millis % 60000) / 1000).toFixed(0);
+    return minutes + ":" + (seconds < 10 ? '0' : '') + seconds;
+  }
+
+  // Chat maker
   function addChat(data, emp) {
     if (SkipRoom(data.chatroom)) {
       return;
@@ -544,8 +565,63 @@ function PartyPage({ navigation }) {
     chatMessagesGlobal.push(data);
     setState({ chatMessages: chatMessagesGlobal});
   }
+  
+  // Polling function to query Spotify API
+  async function Poller() {
+    if (doPoller) {
+      SpotifyApi.getMyCurrentPlayingTrack(null, function(err, data) {
+        if (err) {
+          alert("Couldn't get playback state from Spotify");
+          doPoller = false;
+          navigation.popToTop();
+        } else {
+          let change = false;
+          if(p_paused !== !(data["is_playing"])) {
+            console.log("COND 1");
+            change = true;
+          } else if ((data["progress_ms"] < (p_position-2000)) || (data["progress_ms"] > (p_position+2000))) {
+            console.log("COND 2");
+            change = true;
+          } else if (p_track !== data["item"]["id"]) {
+            console.log("COND 3")
+            change = true;
+          }
+          p_paused = !(data["is_playing"]);
+          p_position = data["progress_ms"];
+          p_track = data["item"]["id"];
+          p_track_title = data["item"]["name"];
+          p_track_uri = data["item"]["uri"];
+          if (change) {
+            socket.emit("state", {
+              paused: p_paused,
+              position: p_position,
+              track: p_track,
+              track_title: p_track_title,
+              track_uri: p_track_uri
+            });
+          }
+        }
+      });
+    }
+    await setTimeout(Poller, 1000);
+  }
 
   if (!(init_done)) {
+    // Initial player object values
+    SpotifyApi.getMyCurrentPlayingTrack(null, function(err, data) {
+      if (err) {
+        alert("Couldn't get playback state from Spotify");
+        doPoller = false;
+        navigation.popToTop();
+      } else {
+        console.log("INIT pOLL");
+        p_paused = !(data["is_playing"]);
+        p_position = data["progress_ms"];
+        p_track = data["item"]["id"];
+        p_track_title = data["item"]["name"];
+        p_track_uri = data["item"]["uri"];
+      }
+    })
     // Socket listeners
     console.log("MAKING LISTENER")
     socket.on("message", (data) => { // Listener: "message"
@@ -583,13 +659,101 @@ function PartyPage({ navigation }) {
         }, 500);
       }
     })
-    socket.on("chatroom_number", (data) => { // Listener : "chatroom_number"
+    socket.on("chatroom_number", (data) => { // Listener: "chatroom_number"
       if (data.number == 1) {
         setChatroomNumber("You're all alone")
       } else {
         setChatroomNumber(data.number + " in party")
       }
     })
+    socket.on("state", (data) => { // Listener: "state"
+      console.log("GOT STATE");
+      if (SkipRoom(data.chatroom)) {
+        return
+      }
+      if (skip) {
+        console.log("SKIP ENABLED");
+        return
+      }
+      if (data.id == _id) {
+        idCheck = true;
+      } else {
+        idCheck = false;
+      }
+      continueWithSeek = true
+      if (p_paused !== data.paused) {
+        console.log("PAUSE STATE");
+        continueWithSeek = false;
+        p_paused = data.paused;
+        if (p_paused) {
+          console.log("PAUSEEEE");
+          data.message = "Paused playback";
+          addChat(data, true);
+          if (!idCheck) {
+            SpotifyApi.pause(null, function(err, data) {
+              if (err) {
+                alert("Could not pause music");
+                navigation.popToTop();
+                return;
+              }
+            })
+          }
+        } else {
+          console.log("RESSUMMMEEE");
+          data.message = "Resumed playback";
+          addChat(data, true);
+          if (!idCheck) {
+            SpotifyApi.play(null, function(err, data) {
+              if (err) {
+                alert("Could not play music")
+                navigation.popToTop();
+                return;
+              }
+            })
+          }
+        }
+      } else {
+        continueWithSeek = true;
+      }
+
+      if (p_track !== data.track) {
+        console.log("TRACK CHANGE");
+        p_track = data.track;
+        continueWithSeek = false;
+        data.message = "Now playing " + data.track_title;
+        addChat(data, true);
+        if (!idCheck) {
+          SpotifyApi.play({uris: [data.track_uri]}, function(err, data) {
+            if (err) {
+              alert("Could not play track");
+              navigation.popToTop()
+              return;
+            }
+          })
+        }
+      } else {
+        if (continueWithSeek) {
+          if ((data.position < (p_position-2000)) || (data.position > (p_position+2000))) {
+            console.log("POSITION CHANGE");
+            p_position = data.position;
+            data.message = "Seeked to " + millisToMinutesAndSeconds(p_position);
+            makeChat(data, true);
+            if (!idCheck) {
+              SpotifyApi.play({uris: [data.track_uri], position_ms: p_position}, function(err, data) {
+                if (err) {
+                  alert("Could not play track from position");
+                  navigation.popToTop()
+                  return;
+                }
+              })
+            }
+          }
+        }
+      }
+      skip = true;
+      setTimeout(offSkipper, 500);
+    })
+    setTimeout(Poller, 1000);
     init_done = true;
   }
 
@@ -608,6 +772,7 @@ function PartyPage({ navigation }) {
     console.log("typing");
     onChangeMessage(text);
   }
+  
   return (
     <View style={styles.container}>
       <View style={styles.header_container}>
