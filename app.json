@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "spotify-party-mobile",
-    "scheme": "spotif-party",
+    "name": "Spotify Party",
+    "scheme": "spotifyparty",
     "slug": "spotify-party-mobile",
     "platforms": [
       "ios",

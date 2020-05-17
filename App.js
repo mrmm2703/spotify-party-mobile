@@ -5,7 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import * as WebBrowser from 'expo-web-browser';
 import io from "socket.io-client";
 
-const endpoint = "https://accounts.spotify.com/en/authorize?client_id=d7bc09b9fc624ecfb3345d126c96f61f&redirect_uri=exp:%2F%2F192.168.1.148:19000&response_type=token&scope=streaming%20user-read-email%20user-modify-playback-state%20user-read-private&show_dialog=true"
+const endpoint = "https://accounts.spotify.com/en/authorize?client_id=d7bc09b9fc624ecfb3345d126c96f61f&redirect_uri=spotifyparty:%2F%2F&response_type=token&scope=streaming%20user-read-email%20user-modify-playback-state%20user-read-private&show_dialog=true"
 let access_token = "NULL";
 let party_code = "NULL";
 const Stack = createStackNavigator();
@@ -19,7 +19,7 @@ function _handleUrl(event) {
   // WebBrowser.dismissBrowser();
   let acc = event.url;
   access_token = acc.split("=")[1].split("&")[0];
-  console.log(access_token)
+  console.log("AUTH: Bearer " + access_token)
 }
 
 const win = Dimensions.get("window").width;
@@ -171,7 +171,6 @@ function JoinPartyPage({ navigation }) {
           socket = io.connect("https://fourone.ddns.net:3000");
         }
 
-        console.log("Continueeeee");
         party_code = party_inp;
 
         // Get user information from Spotify
@@ -198,14 +197,13 @@ function JoinPartyPage({ navigation }) {
             // User's name
             _name = json["display_name"];
             _id = json["id"];
-            console.log(_name);
-            console.log(_profile_url);
-            console.log(_premium);
+            console.log("USER: Name "+ _name);
+            console.log("USER: Profile picture " + _profile_url);
+            console.log("USER: Premium " + _premium);
             // Setup SpotifyApi
             SpotifyApi.setAccessToken(access_token);
             // Check for devices
             SpotifyApi.getMyDevices(function(err, data) {
-              console.log(data);
               if (err) {
                 alert("Could not connect to Spotify.");
                 console.log(err);
@@ -475,7 +473,6 @@ function PartyPage({ navigation }) {
   function Chat(myName, myId, myMsg, myEmp, msgId, time) {
     if (myEmp) {
       if (myId == _id) {
-        console.log("EMP, ME");
         return(
           <View key={msgId} style={styles.chat_right}>
           <View style={styles.chat_right_body}>
@@ -487,7 +484,6 @@ function PartyPage({ navigation }) {
         </View>
         )
       } else {
-        console.log("EMP, !ME");
         return(
           <View key={msgId} style={styles.chat_left}>
               <Image style={styles.chat_left_arrow} source={require("./assets/chat-arrow-left.png")}/>
@@ -501,7 +497,6 @@ function PartyPage({ navigation }) {
       }
     } else {
       if (myId == _id) {
-        console.log("!EMP, ME");
         return(
           <View key={msgId} style={styles.chat_right}>
               <View style={styles.chat_right_body}>
@@ -513,7 +508,6 @@ function PartyPage({ navigation }) {
             </View>
         )
       } else {
-        console.log("!EMP, ME");
         return(
         <View key={msgId} style={styles.chat_left}>
               <Image style={styles.chat_left_arrow} source={require("./assets/chat-arrow-left.png")}/>
@@ -549,8 +543,6 @@ function PartyPage({ navigation }) {
     }
     data.msgId = msgId;
     msgId = msgId + 1;
-    console.log("Got message!");
-    console.log(data.message);
     data.emp = emp;
     let date = new Date();
     let hours = date.getHours().toString();
@@ -582,10 +574,9 @@ function PartyPage({ navigation }) {
           dataa.chatroom = party_code;
           let cont = true;
           let contWithSeek = true;
-
           if(p_paused !== !(data["is_playing"])) {
             contWithSeek = false;
-            console.log("COND 1");
+            console.log("POLLER: Paused state change");
             change = true;
             if (!(data["is_playing"])) {
               dataa.message = "Paused playback";
@@ -594,11 +585,10 @@ function PartyPage({ navigation }) {
               dataa.message = "Resumed playback";
               addChat(dataa, true);
             }
-            return;
           }
           
           if (p_track !== data["item"]["id"]) {
-            console.log("COND 3")
+            console.log("POLLER: Track state change")
             change = true;
             dataa.message = "Now playing " + data["item"]["name"];
             addChat(dataa, true);
@@ -607,7 +597,7 @@ function PartyPage({ navigation }) {
           } else {
             if (contWithSeek == true) {
               if ((data["progress_ms"] < (p_position-2000)) || (data["progress_ms"] > (p_position+2000))) {
-                console.log("COND 2");
+                console.log("POLLER: Progress state change");
                 change = true;
                 dataa.message = "Seeked to " + millisToMinutesAndSeconds(data["progress_ms"]);
                 addChat(dataa, true);
@@ -643,7 +633,7 @@ function PartyPage({ navigation }) {
         doPoller = false;
         navigation.popToTop();
       } else {
-        console.log("INIT pOLL");
+        console.log("POLLER: Running initial poll");
         p_paused = !(data["is_playing"]);
         p_position = data["progress_ms"];
         p_track = data["item"]["id"];
@@ -652,16 +642,13 @@ function PartyPage({ navigation }) {
       }
     })
     // Socket listeners
-    console.log("MAKING LISTENER")
+    console.log("SOCKET: Creating socket listeners")
     socket.on("message", (data) => { // Listener: "message"
       addChat(data, false);
     })
     socket.on("joined", (data) => { // Listener: "joined"
       if (msgId == 0) {
-        console.log("First Join")
         data.id = _id;
-      } else {
-        console.log("!First join")
       }
       data.message = "Joined the party";
       addChat(data, true)
@@ -696,12 +683,11 @@ function PartyPage({ navigation }) {
       }
     })
     socket.on("state", (data) => { // Listener: "state"
-      console.log("GOT STATE");
+      console.log("SOCKET: Got state change");
       if (SkipRoom(data.chatroom)) {
         return
       }
       if (skip == true) {
-        console.log("SKIP ENABLED");
         return
       }
       if (data.id == _id) {
@@ -711,11 +697,11 @@ function PartyPage({ navigation }) {
       }
       continueWithSeek = true
       if (p_paused !== data.paused) {
-        console.log("PAUSE STATE");
+        console.log("SOCKET: Pause state has changed");
         continueWithSeek = false;
         p_paused = data.paused;
         if (p_paused == true) {
-          console.log("PAUSEEEE");
+          console.log("SOCKET: Paused state");
           data.message = "Paused playback";
           addChat(data, true);
           if (!idCheck) {
@@ -728,7 +714,7 @@ function PartyPage({ navigation }) {
             })
           }
         } else {
-          console.log("RESSUMMMEEE");
+          console.log("SOCKET: Resumed state");
           data.message = "Resumed playback";
           addChat(data, true);
           if (!idCheck) {
@@ -746,7 +732,7 @@ function PartyPage({ navigation }) {
       }
 
       if (p_track !== data.track) {
-        console.log("TRACK CHANGE");
+        console.log("SOCKET: Track state change");
         p_track = data.track;
         continueWithSeek = false;
         data.message = "Now playing " + data.track_title;
@@ -763,7 +749,7 @@ function PartyPage({ navigation }) {
       } else {
         if (continueWithSeek) {
           if ((data.position < (p_position-2000)) || (data.position > (p_position+2000))) {
-            console.log("POSITION CHANGE");
+            console.log("SOCKET: Position state change");
             p_position = data.position;
             data.message = "Seeked to " + millisToMinutesAndSeconds(p_position);
             addChat(data, true);
@@ -794,11 +780,12 @@ function PartyPage({ navigation }) {
   // Reactors
   function sendMsg() { // Emit message
     onChangeMessage("");
-    socket.emit("message", {message: message_input});
+    if (!(message_input.trim().length == 0)) {
+      socket.emit("message", {message: message_input});
+    }
   }
   function sendTyping(text) { // Emit typing
     socket.emit("typing");
-    console.log("typing");
     onChangeMessage(text);
   }
   
