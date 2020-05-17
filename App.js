@@ -576,16 +576,45 @@ function PartyPage({ navigation }) {
           navigation.popToTop();
         } else {
           let change = false;
+          let dataa = {};
+          dataa.id = _id;
+          dataa.name = _name;
+          dataa.chatroom = party_code;
+          let cont = true;
+          let contWithSeek = true;
+
           if(p_paused !== !(data["is_playing"])) {
+            contWithSeek = false;
             console.log("COND 1");
             change = true;
-          } else if ((data["progress_ms"] < (p_position-2000)) || (data["progress_ms"] > (p_position+2000))) {
-            console.log("COND 2");
-            change = true;
-          } else if (p_track !== data["item"]["id"]) {
+            if (!(data["is_playing"])) {
+              dataa.message = "Paused playback";
+              addChat(dataa, true);
+            } else {
+              dataa.message = "Resumed playback";
+              addChat(dataa, true);
+            }
+            return;
+          }
+          
+          if (p_track !== data["item"]["id"]) {
             console.log("COND 3")
             change = true;
+            dataa.message = "Now playing " + data["item"]["name"];
+            addChat(dataa, true);
+            cont = false;
+            contWithSeek = false;
+          } else {
+            if (contWithSeek == true) {
+              if ((data["progress_ms"] < (p_position-2000)) || (data["progress_ms"] > (p_position+2000))) {
+                console.log("COND 2");
+                change = true;
+                dataa.message = "Seeked to " + millisToMinutesAndSeconds(data["progress_ms"]);
+                addChat(dataa, true);
+              }
+            }
           }
+          
           p_paused = !(data["is_playing"]);
           p_position = data["progress_ms"];
           p_track = data["item"]["id"];
@@ -593,11 +622,11 @@ function PartyPage({ navigation }) {
           p_track_uri = data["item"]["uri"];
           if (change) {
             socket.emit("state", {
-              paused: p_paused,
-              position: p_position,
-              track: p_track,
-              track_title: p_track_title,
-              track_uri: p_track_uri
+              paused: !(data["is_playing"]),
+              position: data["progress_ms"],
+              track: data["item"]["id"],
+              track_title: data["item"]["name"],
+              track_uri: data["item"]["uri"]
             });
           }
         }
@@ -685,7 +714,7 @@ function PartyPage({ navigation }) {
         console.log("PAUSE STATE");
         continueWithSeek = false;
         p_paused = data.paused;
-        if (p_paused) {
+        if (p_paused == true) {
           console.log("PAUSEEEE");
           data.message = "Paused playback";
           addChat(data, true);
@@ -737,7 +766,7 @@ function PartyPage({ navigation }) {
             console.log("POSITION CHANGE");
             p_position = data.position;
             data.message = "Seeked to " + millisToMinutesAndSeconds(p_position);
-            makeChat(data, true);
+            addChat(data, true);
             if (!idCheck) {
               SpotifyApi.play({uris: [data.track_uri], position_ms: p_position}, function(err, data) {
                 if (err) {
