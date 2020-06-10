@@ -5,7 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import * as WebBrowser from 'expo-web-browser';
 import io from "socket.io-client";
 
-const endpoint = "https://accounts.spotify.com/en/authorize?client_id=d7bc09b9fc624ecfb3345d126c96f61f&redirect_uri=spotifyparty:%2F%2F&response_type=token&scope=streaming%20user-read-email%20user-modify-playback-state%20user-read-private&show_dialog=true"
+const endpoint = "https://accounts.spotify.com/en/authorize?client_id=d7bc09b9fc624ecfb3345d126c96f61f&redirect_uri=exp%3A%2F%2Fexp.host%2F%40mrmm2703%2Fspotify-party-mobile&response_type=token&scope=streaming%20user-read-email%20user-modify-playback-state%20user-read-private&show_dialog=true"
 let access_token = "NULL";
 let party_code = "NULL";
 const Stack = createStackNavigator();
@@ -16,7 +16,7 @@ let Spotify = require("spotify-web-api-js");
 Linking.addEventListener("url", _handleUrl)
 
 function _handleUrl(event) {
-  // WebBrowser.dismissBrowser();
+  WebBrowser.dismissBrowser(); // Comment line for Android while in testing environment
   let acc = event.url;
   access_token = acc.split("=")[1].split("&")[0];
   console.log("AUTH: Bearer " + access_token)
